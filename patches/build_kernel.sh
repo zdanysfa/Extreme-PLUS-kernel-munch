@@ -77,7 +77,7 @@ rm -rf out out_hyperos out_aosp anykernel anykernel_* EXTREME++*.zip
 find . -type f \( -name "dtbo.img" -o -name "Image" -o -name "Image.gz" \) -delete
 
 # EXTREME+ Governor & GPU Devfreq base symbols.
-# ZRAM/swap stay at the stock AstideLabs configuration (LZ4 default).
+# ZRAM default compressor is forced to ZSTD later in build_target_os (stock AstideLabs was LZ4).
 cat >> "arch/arm64/configs/${DEFCONFIG}" << 'EOF'
 CONFIG_PM_DEVFREQ=y
 CONFIG_DEVFREQ_GOV_QCOM_ADRENO_TZ=y
@@ -158,6 +158,12 @@ if apk_sign_path:
     echo "CONFIG_KSU_MULTI_MANAGER_SUPPORT=y" >> "arch/arm64/configs/${DEFCONFIG}"
     echo "CONFIG_THREAD_INFO_IN_TASK=y" >> "arch/arm64/configs/${DEFCONFIG}"
     echo "[+] RKSU / ReSukiSU Multi-Manager Non-GKI setup finished."
+
+    # NoMount: built-in VFS path redirection (mountless modules); 4.19 can't load the upstream GKI LKM.
+    # Root builds only: noroot variants compile before this runs, so fs/nomount isn't in their tree.
+    curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh" | bash -s -- v2.3.0-720
+    echo "CONFIG_NOMOUNT=y" >> "arch/arm64/configs/${DEFCONFIG}"
+    echo "[+] NoMount built-in setup finished."
 }
 
 # ------------------------------------------
