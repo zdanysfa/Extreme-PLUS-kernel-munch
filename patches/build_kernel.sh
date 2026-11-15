@@ -120,6 +120,9 @@ inject_ksu_susfs() {
         echo "[+] Default hook set to KSU_SUSFS in drivers/kernelsu/Kconfig"
     fi
 
+    # Wire SuSFS v2.4.0 PRIORITY_UID_FILTER into BakaSU (Kconfig, supercall, packages.list refresh), as in simonpunk's KernelSU patch.
+    patch -p1 -d KernelSU --forward --no-backup-if-mismatch < bakasu-susfs-priority-uid-filter.patch || { echo "❌ BakaSU priority-uid-filter patch failed"; exit 1; }
+
     python3 -c '
 import os
 
@@ -436,6 +439,7 @@ build_target_os() {
                 -e KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
                 -e KSU_SUSFS_OPEN_REDIRECT \
                 -e KSU_SUSFS_SUS_MAP \
+                -e KSU_SUSFS_PRIORITY_UID_FILTER \
                 -d KSU_DISABLE_MANAGER \
                 -d KSU_DISABLE_POLICY
         else
@@ -456,6 +460,7 @@ build_target_os() {
                 -d KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
                 -d KSU_SUSFS_OPEN_REDIRECT \
                 -d KSU_SUSFS_SUS_MAP \
+                -d KSU_SUSFS_PRIORITY_UID_FILTER \
                 -d KSU_DISABLE_MANAGER \
                 -d KSU_DISABLE_POLICY
         fi

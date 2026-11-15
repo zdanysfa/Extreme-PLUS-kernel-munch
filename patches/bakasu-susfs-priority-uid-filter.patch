@@ -1,0 +1,61 @@
+diff --git a/kernel/Kconfig b/kernel/Kconfig
+index 79bc79ee..aa88bebd 100644
+--- a/kernel/Kconfig
++++ b/kernel/Kconfig
+@@ -244,6 +244,14 @@ config KSU_SUSFS_SUS_MAP
+         - It may not be able to evade detections by apps that implement a good injection detection.
+         - Effective only on zygote spawned umounted user app process >= 10000.
+ 
++config KSU_SUSFS_PRIORITY_UID_FILTER
++    bool "Enable to allow adding user-defined uids that will be hidden from getpriority/setpriority/ioprio_get/ioprio_set syscall"
++    depends on KSU_SUSFS
++    default y
++    help
++        - Allow hiding user-defined uids from syscalls like getpriority/setpriority/ioprio_get/ioprio_set.
++        - Effective on all processes with uid >= 10000.
++
+ endmenu
+ 
+ endmenu
+diff --git a/kernel/manager/throne_tracker.c b/kernel/manager/throne_tracker.c
+index d487fc8d..975e324a 100644
+--- a/kernel/manager/throne_tracker.c
++++ b/kernel/manager/throne_tracker.c
+@@ -19,6 +19,9 @@
+ #include "manager/throne_tracker.h"
+ #include "compat/kernel_compat.h"
+ #include "feature/dynamic_manager.h"
++#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
++#include <linux/susfs.h>
++#endif
+ 
+ #define SYSTEM_PACKAGES_LIST_PATH "/data/system/packages.list"
+ #define SYSTEM_PACKAGES_LIST_TMP_PATH "/data/system/packages.list.tmp"
+@@ -353,6 +356,10 @@ void do_track_throne(void *data)
+ prune:
+     // then prune the allowlist
+     ksu_prune_allowlist(is_uid_exist, &uid_list);
++#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
++    // packages.list changed: re-resolve the SuSFS priority uid filter
++    susfs_parse_priority_app_strings();
++#endif
+ out:
+     // free uid_list
+     list_for_each_entry_safe (np, n, &uid_list, list) {
+diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
+index c23a7cb4..4b94ede1 100644
+--- a/kernel/supercall/dispatch.c
++++ b/kernel/supercall/dispatch.c
+@@ -1168,6 +1168,12 @@ int ksu_handle_susfs_cmd(unsigned int cmd, void __user **arg)
+         return 0;
+     }
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
++#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
++    case CMD_SUSFS_SET_PRIORITY_UID_FILTER: {
++        susfs_set_priority_uid_filter(arg);
++        return 0;
++    }
++#endif // #ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
+     case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING: {
+         susfs_set_avc_log_spoofing(arg);
+         return 0;

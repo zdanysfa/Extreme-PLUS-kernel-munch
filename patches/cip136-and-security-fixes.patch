@@ -962,6 +962,32 @@ index ad739255951f..90c5349a1f1c 100644
  		}
  
  		result[k] = r01.m_low;
+diff --git a/crypto/lzo-rle.c b/crypto/lzo-rle.c
+index ea9c75b1db49..f5531ef86bdd 100644
+--- a/crypto/lzo-rle.c
++++ b/crypto/lzo-rle.c
+@@ -68,7 +68,7 @@ static int __lzorle_compress(const u8 *src, unsigned int slen,
+ 	size_t tmp_len = *dlen; /* size_t(ulong) <-> uint on 64 bit */
+ 	int err;
+ 
+-	err = lzorle1x_1_compress(src, slen, dst, &tmp_len, ctx);
++	err = lzorle1x_1_compress_safe(src, slen, dst, &tmp_len, ctx);
+ 
+ 	if (err != LZO_E_OK)
+ 		return -EINVAL;
+diff --git a/crypto/lzo.c b/crypto/lzo.c
+index 218567d717d6..8122510b2862 100644
+--- a/crypto/lzo.c
++++ b/crypto/lzo.c
+@@ -68,7 +68,7 @@ static int __lzo_compress(const u8 *src, unsigned int slen,
+ 	size_t tmp_len = *dlen; /* size_t(ulong) <-> uint on 64 bit */
+ 	int err;
+ 
+-	err = lzo1x_1_compress(src, slen, dst, &tmp_len, ctx);
++	err = lzo1x_1_compress_safe(src, slen, dst, &tmp_len, ctx);
+ 
+ 	if (err != LZO_E_OK)
+ 		return -EINVAL;
 diff --git a/crypto/pcrypt.c b/crypto/pcrypt.c
 index 56d3a302bd18..04a9dc6c69e8 100644
 --- a/crypto/pcrypt.c
@@ -14307,6 +14333,29 @@ index 44399c18190c..4e6b9909cf23 100644
  /*
   * This is the global environment of the parser. This information is
   * persistent for main-items. The global environment can be saved and
+diff --git a/include/linux/lzo.h b/include/linux/lzo.h
+index e95c7d1092b2..4d30e3624acd 100644
+--- a/include/linux/lzo.h
++++ b/include/linux/lzo.h
+@@ -24,10 +24,18 @@
+ int lzo1x_1_compress(const unsigned char *src, size_t src_len,
+ 		     unsigned char *dst, size_t *dst_len, void *wrkmem);
+ 
++/* Same as above but does not write more than dst_len to dst. */
++int lzo1x_1_compress_safe(const unsigned char *src, size_t src_len,
++			  unsigned char *dst, size_t *dst_len, void *wrkmem);
++
+ /* This requires 'wrkmem' of size LZO1X_1_MEM_COMPRESS */
+ int lzorle1x_1_compress(const unsigned char *src, size_t src_len,
+ 		     unsigned char *dst, size_t *dst_len, void *wrkmem);
+ 
++/* Same as above but does not write more than dst_len to dst. */
++int lzorle1x_1_compress_safe(const unsigned char *src, size_t src_len,
++			     unsigned char *dst, size_t *dst_len, void *wrkmem);
++
+ /* safe decompression with overrun testing */
+ int lzo1x_decompress_safe(const unsigned char *src, size_t src_len,
+ 			  unsigned char *dst, size_t *dst_len);
 diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
 index 12f1a7d76ea7..24e1dad5f63c 100644
 --- a/include/linux/netdevice.h
@@ -15659,6 +15708,313 @@ index 0ba3ea86b546..e043f26f86d8 100644
  	}
  }
 -EXPORT_SYMBOL(glob_match);
+diff --git a/lib/lzo/Makefile b/lib/lzo/Makefile
+index f0f7d7ca2b83..dba5732936c4 100644
+--- a/lib/lzo/Makefile
++++ b/lib/lzo/Makefile
+@@ -1,4 +1,4 @@
+-lzo_compress-objs := lzo1x_compress.o
++lzo_compress-objs := lzo1x_compress.o lzo1x_compress_safe.o
+ lzo_decompress-objs := lzo1x_decompress_safe.o
+ 
+ obj-$(CONFIG_LZO_COMPRESS) += lzo_compress.o
+diff --git a/lib/lzo/lzo1x_compress.c b/lib/lzo/lzo1x_compress.c
+index b8dec548721b..382f77ea2133 100644
+--- a/lib/lzo/lzo1x_compress.c
++++ b/lib/lzo/lzo1x_compress.c
+@@ -17,11 +17,22 @@
+ #include <linux/lzo.h>
+ #include "lzodefs.h"
+ 
+-static noinline size_t
+-lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+-		    unsigned char *out, size_t *out_len,
+-		    size_t ti, void *wrkmem, signed char *state_offset,
+-		    const unsigned char bitstream_version)
++#undef LZO_UNSAFE
++
++#ifndef LZO_SAFE
++#define LZO_UNSAFE 1
++#define LZO_SAFE(name) name
++#define HAVE_OP(x) 1
++#endif
++
++#define NEED_OP(x) if (unlikely(!HAVE_OP(x))) goto output_overrun
++
++static noinline int
++LZO_SAFE(lzo1x_1_do_compress)(const unsigned char *in, size_t in_len,
++			      unsigned char **out, unsigned char *op_end,
++			      size_t *tp, void *wrkmem,
++			      signed char *state_offset,
++			      const unsigned char bitstream_version)
+ {
+ 	const unsigned char *ip;
+ 	unsigned char *op;
+@@ -29,8 +40,9 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 	const unsigned char * const ip_end = in + in_len - 20;
+ 	const unsigned char *ii;
+ 	lzo_dict_t * const dict = (lzo_dict_t *) wrkmem;
++	size_t ti = *tp;
+ 
+-	op = out;
++	op = *out;
+ 	ip = in;
+ 	ii = ip;
+ 	ip += ti < 4 ? 4 - ti : 0;
+@@ -117,25 +129,32 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 		if (t != 0) {
+ 			if (t <= 3) {
+ 				op[*state_offset] |= t;
++				NEED_OP(4);
+ 				COPY4(op, ii);
+ 				op += t;
+ 			} else if (t <= 16) {
++				NEED_OP(17);
+ 				*op++ = (t - 3);
+ 				COPY8(op, ii);
+ 				COPY8(op + 8, ii + 8);
+ 				op += t;
+ 			} else {
+ 				if (t <= 18) {
++					NEED_OP(1);
+ 					*op++ = (t - 3);
+ 				} else {
+ 					size_t tt = t - 18;
++					NEED_OP(1);
+ 					*op++ = 0;
+ 					while (unlikely(tt > 255)) {
+ 						tt -= 255;
++						NEED_OP(1);
+ 						*op++ = 0;
+ 					}
++					NEED_OP(1);
+ 					*op++ = tt;
+ 				}
++				NEED_OP(t);
+ 				do {
+ 					COPY8(op, ii);
+ 					COPY8(op + 8, ii + 8);
+@@ -152,6 +171,7 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 		if (unlikely(run_length)) {
+ 			ip += run_length;
+ 			run_length -= MIN_ZERO_RUN_LENGTH;
++			NEED_OP(4);
+ 			put_unaligned_le32((run_length << 21) | 0xfffc18
+ 					   | (run_length & 0x7), op);
+ 			op += 4;
+@@ -244,10 +264,12 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 		ip += m_len;
+ 		if (m_len <= M2_MAX_LEN && m_off <= M2_MAX_OFFSET) {
+ 			m_off -= 1;
++			NEED_OP(2);
+ 			*op++ = (((m_len - 1) << 5) | ((m_off & 7) << 2));
+ 			*op++ = (m_off >> 3);
+ 		} else if (m_off <= M3_MAX_OFFSET) {
+ 			m_off -= 1;
++			NEED_OP(1);
+ 			if (m_len <= M3_MAX_LEN)
+ 				*op++ = (M3_MARKER | (m_len - 2));
+ 			else {
+@@ -255,14 +277,18 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 				*op++ = M3_MARKER | 0;
+ 				while (unlikely(m_len > 255)) {
+ 					m_len -= 255;
++					NEED_OP(1);
+ 					*op++ = 0;
+ 				}
++				NEED_OP(1);
+ 				*op++ = (m_len);
+ 			}
++			NEED_OP(2);
+ 			*op++ = (m_off << 2);
+ 			*op++ = (m_off >> 6);
+ 		} else {
+ 			m_off -= 0x4000;
++			NEED_OP(1);
+ 			if (m_len <= M4_MAX_LEN)
+ 				*op++ = (M4_MARKER | ((m_off >> 11) & 8)
+ 						| (m_len - 2));
+@@ -283,11 +309,14 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 				m_len -= M4_MAX_LEN;
+ 				*op++ = (M4_MARKER | ((m_off >> 11) & 8));
+ 				while (unlikely(m_len > 255)) {
++					NEED_OP(1);
+ 					m_len -= 255;
+ 					*op++ = 0;
+ 				}
++				NEED_OP(1);
+ 				*op++ = (m_len);
+ 			}
++			NEED_OP(2);
+ 			*op++ = (m_off << 2);
+ 			*op++ = (m_off >> 6);
+ 		}
+@@ -296,14 +325,20 @@ lzo1x_1_do_compress(const unsigned char *in, size_t in_len,
+ 		ii = ip;
+ 		goto next;
+ 	}
+-	*out_len = op - out;
+-	return in_end - (ii - ti);
++	*out = op;
++	*tp = in_end - (ii - ti);
++	return LZO_E_OK;
++
++output_overrun:
++	return LZO_E_OUTPUT_OVERRUN;
+ }
+ 
+-int lzogeneric1x_1_compress(const unsigned char *in, size_t in_len,
+-		     unsigned char *out, size_t *out_len,
+-		     void *wrkmem, const unsigned char bitstream_version)
++static int LZO_SAFE(lzogeneric1x_1_compress)(
++	const unsigned char *in, size_t in_len,
++	unsigned char *out, size_t *out_len,
++	void *wrkmem, const unsigned char bitstream_version)
+ {
++	unsigned char * const op_end = out + *out_len;
+ 	const unsigned char *ip = in;
+ 	unsigned char *op = out;
+ 	unsigned char *data_start;
+@@ -327,14 +362,18 @@ int lzogeneric1x_1_compress(const unsigned char *in, size_t in_len,
+ 	while (l > 20) {
+ 		size_t ll = l <= (m4_max_offset + 1) ? l : (m4_max_offset + 1);
+ 		uintptr_t ll_end = (uintptr_t) ip + ll;
++		int err;
++
+ 		if ((ll_end + ((t + ll) >> 5)) <= ll_end)
+ 			break;
+ 		BUILD_BUG_ON(D_SIZE * sizeof(lzo_dict_t) > LZO1X_1_MEM_COMPRESS);
+ 		memset(wrkmem, 0, D_SIZE * sizeof(lzo_dict_t));
+-		t = lzo1x_1_do_compress(ip, ll, op, out_len, t, wrkmem,
+-					&state_offset, bitstream_version);
++		err = LZO_SAFE(lzo1x_1_do_compress)(
++			ip, ll, &op, op_end, &t, wrkmem,
++			&state_offset, bitstream_version);
++		if (err != LZO_E_OK)
++			return err;
+ 		ip += ll;
+-		op += *out_len;
+ 		l  -= ll;
+ 	}
+ 	t += l;
+@@ -343,20 +382,26 @@ int lzogeneric1x_1_compress(const unsigned char *in, size_t in_len,
+ 		const unsigned char *ii = in + in_len - t;
+ 
+ 		if (op == data_start && t <= 238) {
++			NEED_OP(1);
+ 			*op++ = (17 + t);
+ 		} else if (t <= 3) {
+ 			op[state_offset] |= t;
+ 		} else if (t <= 18) {
++			NEED_OP(1);
+ 			*op++ = (t - 3);
+ 		} else {
+ 			size_t tt = t - 18;
++			NEED_OP(1);
+ 			*op++ = 0;
+ 			while (tt > 255) {
+ 				tt -= 255;
++				NEED_OP(1);
+ 				*op++ = 0;
+ 			}
++			NEED_OP(1);
+ 			*op++ = tt;
+ 		}
++		NEED_OP(t);
+ 		if (t >= 16) do {
+ 			COPY8(op, ii);
+ 			COPY8(op + 8, ii + 8);
+@@ -369,31 +414,38 @@ int lzogeneric1x_1_compress(const unsigned char *in, size_t in_len,
+ 		} while (--t > 0);
+ 	}
+ 
++	NEED_OP(3);
+ 	*op++ = M4_MARKER | 1;
+ 	*op++ = 0;
+ 	*op++ = 0;
+ 
+ 	*out_len = op - out;
+ 	return LZO_E_OK;
++
++output_overrun:
++	return LZO_E_OUTPUT_OVERRUN;
+ }
+ 
+-int lzo1x_1_compress(const unsigned char *in, size_t in_len,
+-		     unsigned char *out, size_t *out_len,
+-		     void *wrkmem)
++int LZO_SAFE(lzo1x_1_compress)(const unsigned char *in, size_t in_len,
++			       unsigned char *out, size_t *out_len,
++			       void *wrkmem)
+ {
+-	return lzogeneric1x_1_compress(in, in_len, out, out_len, wrkmem, 0);
++	return LZO_SAFE(lzogeneric1x_1_compress)(
++		in, in_len, out, out_len, wrkmem, 0);
+ }
+ 
+-int lzorle1x_1_compress(const unsigned char *in, size_t in_len,
+-		     unsigned char *out, size_t *out_len,
+-		     void *wrkmem)
++int LZO_SAFE(lzorle1x_1_compress)(const unsigned char *in, size_t in_len,
++				  unsigned char *out, size_t *out_len,
++				  void *wrkmem)
+ {
+-	return lzogeneric1x_1_compress(in, in_len, out, out_len,
+-				       wrkmem, LZO_VERSION);
++	return LZO_SAFE(lzogeneric1x_1_compress)(
++		in, in_len, out, out_len, wrkmem, LZO_VERSION);
+ }
+ 
+-EXPORT_SYMBOL_GPL(lzo1x_1_compress);
+-EXPORT_SYMBOL_GPL(lzorle1x_1_compress);
++EXPORT_SYMBOL_GPL(LZO_SAFE(lzo1x_1_compress));
++EXPORT_SYMBOL_GPL(LZO_SAFE(lzorle1x_1_compress));
+ 
++#ifndef LZO_UNSAFE
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("LZO1X-1 Compressor");
++#endif
+diff --git a/lib/lzo/lzo1x_compress_safe.c b/lib/lzo/lzo1x_compress_safe.c
+new file mode 100644
+index 000000000000..371c9f849492
+--- /dev/null
++++ b/lib/lzo/lzo1x_compress_safe.c
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ *  LZO1X Compressor from LZO
++ *
++ *  Copyright (C) 1996-2012 Markus F.X.J. Oberhumer <markus@oberhumer.com>
++ *
++ *  The full LZO package can be found at:
++ *  http://www.oberhumer.com/opensource/lzo/
++ *
++ *  Changed for Linux kernel use by:
++ *  Nitin Gupta <nitingupta910@gmail.com>
++ *  Richard Purdie <rpurdie@openedhand.com>
++ */
++
++#define LZO_SAFE(name) name##_safe
++#define HAVE_OP(x) ((size_t)(op_end - op) >= (size_t)(x))
++
++#include "lzo1x_compress.c"
+diff --git a/lib/lzo/lzo1x_decompress_safe.c b/lib/lzo/lzo1x_decompress_safe.c
+index 9e07e9ef1aad..82abd7d27b4e 100644
+--- a/lib/lzo/lzo1x_decompress_safe.c
++++ b/lib/lzo/lzo1x_decompress_safe.c
+@@ -21,9 +21,9 @@
+ 
+ #define HAVE_IP(x)      ((size_t)(ip_end - ip) >= (size_t)(x))
+ #define HAVE_OP(x)      ((size_t)(op_end - op) >= (size_t)(x))
+-#define NEED_IP(x)      if (!HAVE_IP(x)) goto input_overrun
+-#define NEED_OP(x)      if (!HAVE_OP(x)) goto output_overrun
+-#define TEST_LB(m_pos)  if ((m_pos) < out) goto lookbehind_overrun
++#define NEED_IP(x)      if (unlikely(!HAVE_IP(x))) goto input_overrun
++#define NEED_OP(x)      if (unlikely(!HAVE_OP(x))) goto output_overrun
++#define TEST_LB(m_pos)  if (unlikely((m_pos) < out)) goto lookbehind_overrun
+ 
+ /* This MAX_255_COUNT is the maximum number of times we can add 255 to a base
+  * count without overflowing an integer. The multiply will overflow when
 diff --git a/lib/rhashtable.c b/lib/rhashtable.c
 index 6410c857b048..0e01cf9cb63f 100644
 --- a/lib/rhashtable.c
@@ -15686,10 +16042,39 @@ index e02727898197..853830cd6e6d 100644
 --st19
 +-st20
 diff --git a/mm/cma.c b/mm/cma.c
-index ca64d9db177b..e6436f476b47 100644
+index ca64d9db177b..53f596b4e428 100644
 --- a/mm/cma.c
 +++ b/mm/cma.c
-@@ -463,7 +463,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
+@@ -55,7 +55,7 @@ EXPORT_SYMBOL(cma_get_size);
+ 
+ const char *cma_get_name(const struct cma *cma)
+ {
+-	return cma->name ? cma->name : "(undefined)";
++	return cma->name;
+ }
+ EXPORT_SYMBOL_GPL(cma_get_name);
+ 
+@@ -237,13 +237,12 @@ int __init cma_init_reserved_mem(phys_addr_t base, phys_addr_t size,
+ 	 * subsystems (like slab allocator) are available.
+ 	 */
+ 	cma = &cma_areas[cma_area_count];
+-	if (name) {
+-		cma->name = name;
+-	} else {
+-		cma->name = kasprintf(GFP_KERNEL, "cma%d\n", cma_area_count);
+-		if (!cma->name)
+-			return -ENOMEM;
+-	}
++
++	if (name)
++		snprintf(cma->name, CMA_MAX_NAME, name);
++	else
++		snprintf(cma->name, CMA_MAX_NAME,  "cma%d\n", cma_area_count);
++
+ 	cma->base_pfn = PFN_DOWN(base);
+ 	cma->count = size >> PAGE_SHIFT;
+ 	cma->order_per_bit = order_per_bit;
+@@ -463,7 +462,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
  	int max_retries = 20;
  	int available_regions = 0;
  
@@ -15698,7 +16083,7 @@ index ca64d9db177b..e6436f476b47 100644
  		return NULL;
  
  	pr_debug("%s(cma %p, count %zu, align %d)\n", __func__, (void *)cma,
-@@ -542,12 +542,13 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
+@@ -542,12 +541,13 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
  		pr_debug("%s(): memory range at %p is busy, retrying\n",
  			 __func__, pfn_to_page(pfn));
  
@@ -15714,7 +16099,7 @@ index ca64d9db177b..e6436f476b47 100644
  
  	/*
  	 * CMA can allocate multiple page blocks, which results in different
-@@ -598,7 +599,7 @@ bool cma_release(struct cma *cma, const struct page *pages, unsigned int count)
+@@ -598,7 +598,7 @@ bool cma_release(struct cma *cma, const struct page *pages, unsigned int count)
  
  	free_contig_range(pfn, count);
  	cma_clear_bitmap(cma, pfn, count);
@@ -15723,6 +16108,30 @@ index ca64d9db177b..e6436f476b47 100644
  
  	return true;
  }
+diff --git a/mm/cma.h b/mm/cma.h
+index 33c0b517733c..a60653afb2e0 100644
+--- a/mm/cma.h
++++ b/mm/cma.h
+@@ -2,6 +2,10 @@
+ #ifndef __MM_CMA_H__
+ #define __MM_CMA_H__
+ 
++#include <linux/debugfs.h>
++
++#define CMA_MAX_NAME 64
++
+ struct cma {
+ 	unsigned long   base_pfn;
+ 	unsigned long   count;
+@@ -12,7 +16,7 @@ struct cma {
+ 	struct hlist_head mem_head;
+ 	spinlock_t mem_head_lock;
+ #endif
+-	const char *name;
++	char name[CMA_MAX_NAME];
+ };
+ 
+ extern struct cma cma_areas[MAX_CMA_AREAS];
 diff --git a/mm/huge_memory.c b/mm/huge_memory.c
 index b1485122d72f..5afc99883b5c 100644
 --- a/mm/huge_memory.c
