@@ -96,7 +96,7 @@ CONFIG_NET_SCH_FQ_CODEL=y
 EOF
 
 # ------------------------------------------
-# 3. KernelSU (RKSU / ReSukiSU Multi-Manager Non-GKI 4.19 with SuSFS v2.3.0) Setup Function
+# 3. KernelSU (RKSU / ReSukiSU Multi-Manager Non-GKI 4.19 with SuSFS v2.4.0) Setup Function
 # ------------------------------------------
 inject_ksu_susfs() {
     if [ -d "KernelSU" ] || [ -d "drivers/kernelsu" ]; then
@@ -104,9 +104,16 @@ inject_ksu_susfs() {
         return 0
     fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⚡ Injecting ReSukiSU / KowSU Multi-Manager & SuSFS v2.3.0 Source..."
+    echo "⚡ Injecting ReSukiSU / KowSU Multi-Manager & SuSFS v2.4.0 Source..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s -- v4.2.0-rc3
+    # BakaSU (ReSukiSU's new name) main @ 2026-11-10: 88 commits past v4.2.0-rc3, incl. SuSFS backport fixes.
+    curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/548d1dda060ca198823d8808804d01f5209ef4a9/kernel/setup.sh" | bash -s -- 548d1dda060ca198823d8808804d01f5209ef4a9
+
+    # Base tree ships SuSFS v2.4.0 (== JackA1ltman 183beb3); delta = interdiff to JackA1ltman 37b8051 (v2.4.0).
+    if ! grep -q '"v2.4.0"' include/linux/susfs.h; then
+        patch -p1 --forward --no-backup-if-mismatch < susfs-v2.3.0-to-v2.4.0-4.19.patch || { echo "❌ SuSFS v2.4.0 delta failed to apply"; exit 1; }
+        echo "[+] SuSFS upgraded to v2.4.0"
+    fi
 
     if [ -f "drivers/kernelsu/Kconfig" ]; then
         sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' drivers/kernelsu/Kconfig
@@ -332,8 +339,8 @@ build_target_os() {
     if [ "$ROOT_TYPE" == "1" ] || [ "$ROOT_TYPE" == "ksu_susfs" ]; then
         ENABLE_KSU=1
         ENABLE_SUSFS=1
-        ROOT_LABEL="KowSU + SuSFS v2.3.0"
-        ROOT_BANNER="KowSU + SuSFS v2.3.0 (Multi-Manager)"
+        ROOT_LABEL="KowSU + SuSFS v2.4.0"
+        ROOT_BANNER="KowSU + SuSFS v2.4.0 (Multi-Manager)"
         ZIP_SUFFIX="KowSU_SuSFS"
     elif [ "$ROOT_TYPE" == "2" ] || [ "$ROOT_TYPE" == "ksu_no_susfs" ]; then
         ENABLE_KSU=1
@@ -426,7 +433,7 @@ build_target_os() {
     # 6. Root Configuration (ksu_susfs vs ksu_no_susfs vs noroot)
     if [ "$ENABLE_KSU" -eq 1 ]; then
         if [ "$ENABLE_SUSFS" -eq 1 ]; then
-            echo "[*] Injecting Full RKSU / KowSU + SuSFS v2.3.0 Configuration into ${OS_UPPER} .config..."
+            echo "[*] Injecting Full RKSU / KowSU + SuSFS v2.4.0 Configuration into ${OS_UPPER} .config..."
             scripts/config --file "${OUT_DIR}/.config" \
                 -e KSU \
                 -e KSU_SUSFS \
@@ -797,7 +804,7 @@ elif [ "$ROOT_MODE" == "ksu_no_susfs" ]; then
         build_target_os "aosp" 2
     fi
 elif [ "$ROOT_MODE" == "ksu_susfs" ]; then
-    echo "[*] Executing KowSU + SuSFS v2.3.0 Root Build..."
+    echo "[*] Executing KowSU + SuSFS v2.4.0 Root Build..."
     inject_ksu_susfs
     if [ "$TARGET_OS" == "hyperos" ] || [ "$TARGET_OS" == "both" ]; then
         build_target_os "hyperos" 1
@@ -828,7 +835,7 @@ elif [ "$ROOT_MODE" == "all" ]; then
     echo "🚀 COMPLETE SUITE REQUESTED: Compiling ALL 3 Root Variants!"
     echo "   1. Pure Clean Base (No Root)"
     echo "   2. KowSU Multi-Manager (Standard / No SuSFS)"
-    echo "   3. KowSU Multi-Manager + SuSFS v2.3.0"
+    echo "   3. KowSU Multi-Manager + SuSFS v2.4.0"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     sed -i '/CONFIG_KSU/d' "arch/arm64/configs/${DEFCONFIG}" 2>/dev/null || true
     if [ "$TARGET_OS" == "hyperos" ] || [ "$TARGET_OS" == "both" ]; then

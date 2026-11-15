@@ -9,7 +9,7 @@
 [![Device](https://img.shields.io/badge/POCO_F4-munch%20%2F%20munch--in-ff6f00?style=for-the-badge&logo=xiaomi&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
 [![SoC](https://img.shields.io/badge/Snapdragon_870-SM8250--AC%20(Kona%20v2.1)-red?style=for-the-badge&logo=qualcomm&logoColor=white)](https://www.qualcomm.com/products/application/smartphones/snapdragon-8-series-mobile-platforms/snapdragon-870-5g-mobile-platform)
 [![Target Matrix](https://img.shields.io/badge/Targets-HyperOS%201.0--4.0%20%7C%20AOSP%2013--17-success?style=for-the-badge&logo=android&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
-[![Root Support](https://img.shields.io/badge/Root-KowSU%20%2F%20ReSukiSU%20%2B%20SuSFS%20v2.3.0-9c27b0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/ReSukiSU/ReSukiSU)
+[![Root Support](https://img.shields.io/badge/Root-KowSU%20%2F%20BakaSU%20%2B%20SuSFS%20v2.4.0-9c27b0?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Baka-SU/BakaSU)
 [![Companion App](https://img.shields.io/badge/Companion_App-EKM_v2.1.0-e91e63?style=for-the-badge&logo=android&logoColor=white)](https://github.com/PandeyJI-9/extreme-kernel-manager)
 [![Community](https://img.shields.io/badge/Community-Telegram_Support-29b6f6?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/Extremeplus_Support)
 
@@ -36,7 +36,7 @@ Built upon the rock-solid **AstideLabs SM8250 Linux 4.19 LTS** foundation, EXTRE
 | **Default ZRAM Compressor** | **ZSTD Level 3** (High-efficiency dynamic workspace) |
 | **GPU Subsystem** | FakeDreamer 7-Stage OPP Table + Deep Undervolting (`msm-adreno-tz`) |
 | **Peak Prime CPU Clock** | **3.19 GHz Monster Peak** (`3187200` kHz) |
-| **Root Integration** | KowSU / ReSukiSU Multi-Manager + SuSFS v2.3.0 Kernel Stealth |
+| **Root Integration** | KowSU / ReSukiSU Multi-Manager + SuSFS v2.4.0 Kernel Stealth |
 
 ---
 
@@ -161,12 +161,12 @@ Our GPU architecture integrates the renowned **FakeDreamer Adreno 650 OPP table*
 
 ---
 
-### 7. 🛡️ Multi-Manager Root & Kernel Stealth (SuSFS v2.3.0)
+### 7. 🛡️ Multi-Manager Root & Kernel Stealth (SuSFS v2.4.0)
 * **KowSU / ReSukiSU Multi-Manager:** Compatible with official KernelSU, ReSukiSU, and KowSU manager applications.
-* **SuSFS v2.3.0 Full Integration:** Complete kernel-level stealth including path hiding, mount hiding, kstat spoofing, open redirect, and SUS map support.
+* **SuSFS v2.4.0 Full Integration:** Complete kernel-level stealth including path hiding, mount hiding, kstat spoofing, open redirect, and SUS map support.
 * **Bootloader Command-Line Spoofing:** Patches `/proc/cmdline` for normal post-boot processes (`androidboot.verifiedbootstate=green`, `androidboot.flash.locked=1`) while providing genuine cmdline to PID 1 (`init`) and `ueventd` for safe AVB partition mounting.
 * **Available Root Flavors:**
-  * `ksu_susfs` — KowSU / ReSukiSU + SuSFS v2.3.0 (Maximum root & stealth)
+  * `ksu_susfs` — KowSU / ReSukiSU + SuSFS v2.4.0 (Maximum root & stealth)
   * `ksu_no_susfs` — Standard Clean KernelSU (No SuSFS stealth hooks)
   * `noroot` — Pure Clean Non-Root Kernel (Ideal for banking apps / zero root)
 
@@ -278,7 +278,7 @@ cat /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies
 * **Ayush Pandey** — Lead architect, developer, and maintainer of PROJECT EXTREME++.
 * **AstideLabs** — Solid SM8250 Linux 4.19 kernel source foundation.
 * **FakeDreamer / re-noroi** — Adreno 650 RPMh voltage stepping and undervolt tables.
-* **ReSukiSU, KowSU & KOWX712** — Non-GKI multi-manager root and SuSFS v2.3.0 stealth implementation.
+* **ReSukiSU, KowSU & KOWX712** — Non-GKI multi-manager root and SuSFS v2.4.0 stealth implementation.
 * **osm0sis** — AnyKernel3 flashing backend.
 * **Google ACK Team** — Upstream Android Common Kernel anti-stutter optimizations.
 
