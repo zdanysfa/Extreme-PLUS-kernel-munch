@@ -2,10 +2,10 @@
 
 # ⚡ PROJECT EXTREME++ (BMW EDITION) ⚡
 ### Ultimate Silicon-Level Performance & Thermal Architecture for POCO F4 / Redmi K40S (`munch` / `munch-in`)
-**Linux 4.19.325-cip135-st19 · Qualcomm Snapdragon 870 5G (`SM8250-AC`) · Dual Target (HyperOS & AOSP)**
+**Linux 4.19.325-cip136-st20 · Qualcomm Snapdragon 870 5G (`SM8250-AC`) · Dual Target (HyperOS & AOSP)**
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/PandeyJI-9/Extreme-PLUS-kernel-munch/build.yml?branch=main&style=for-the-badge&logo=github&label=Build%20%26%20Release&color=00c853)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch/actions)
-[![Kernel Version](https://img.shields.io/badge/Linux_Kernel-4.19.325--cip135--st19-007acc?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
+[![Kernel Version](https://img.shields.io/badge/Linux_Kernel-4.19.325--cip136--st20-007acc?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
 [![Device](https://img.shields.io/badge/POCO_F4-munch%20%2F%20munch--in-ff6f00?style=for-the-badge&logo=xiaomi&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
 [![SoC](https://img.shields.io/badge/Snapdragon_870-SM8250--AC%20(Kona%20v2.1)-red?style=for-the-badge&logo=qualcomm&logoColor=white)](https://www.qualcomm.com/products/application/smartphones/snapdragon-8-series-mobile-platforms/snapdragon-870-5g-mobile-platform)
 [![Target Matrix](https://img.shields.io/badge/Targets-HyperOS%201.0--4.0%20%7C%20AOSP%2013--17-success?style=for-the-badge&logo=android&logoColor=white)](https://github.com/PandeyJI-9/Extreme-PLUS-kernel-munch)
@@ -30,7 +30,7 @@ Built upon the rock-solid **AstideLabs SM8250 Linux 4.19 LTS** foundation, EXTRE
 | Attribute | Specification |
 | :--- | :--- |
 | **Project Status** | 🟢 **Official Stable · Production Ready (Daily Driver)** |
-| **Linux Kernel Base** | AstideLabs SM8250 4.19 (`4.19.325-cip135-st19`) |
+| **Linux Kernel Base** | AstideLabs SM8250 4.19 (`4.19.325-cip136-st20`) |
 | **Built-in Boot Governor** | `extreme+` (Active from boot, zero laggy service scripts) |
 | **Official Companion App** | **[Extreme Kernel Manager (EKM)](https://github.com/PandeyJI-9/extreme-kernel-manager)** (BMW M-Power UI & Live Control) |
 | **Default ZRAM Compressor** | **ZSTD Level 3** (High-efficiency dynamic workspace) |
@@ -243,8 +243,8 @@ Verify your active silicon tuning after boot:
 ```bash
 # 1. Check Kernel Release Name
 uname -r
-# Expected (HyperOS): 4.19.325-cip135-st19-Extreme++Gaming-HyperOS-BMW-...
-# Expected (AOSP):    4.19.325-cip135-st19-Extreme++Gaming-AOSP-BMW-...
+# Expected (HyperOS): 4.19.325-cip136-st20-Extreme++Gaming-HyperOS-BMW-...
+# Expected (AOSP):    4.19.325-cip136-st20-Extreme++Gaming-AOSP-BMW-...
 
 # 2. Verify Active Governor (Should be extreme+ on all clusters)
 for p in /sys/devices/system/cpu/cpufreq/policy*; do

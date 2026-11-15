@@ -86,6 +86,8 @@ jobs:
           git fetch --depth=1 origin refs/pull/74/merge
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "fcf366797808bcc938a7248cded079cf6ea2e26d"
+          # CIP v4.19.325-cip136 merge (conflicts resolved as in AstideLabs d4d8446) + standalone security fixes.
+          git apply ../patches/cip136-and-security-fixes.patch
           cd ..
 
       - name: "⚙️ Inject PandeyJI Custom Build Script"
