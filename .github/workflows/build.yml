@@ -173,8 +173,9 @@ jobs:
           set -euo pipefail
 
           if [ -z "${HYPEROSIMGS_URL:-}" ]; then
-            echo "::error::Google Drive secret 'hyperosimgs' is not set! Required to repack flashable HyperOS 4 images."
-            exit 1
+            # Forks have no secrets: skip repack so the AnyKernel ZIP + raw images still upload.
+            echo "::warning::Secret 'hyperosimgs' not set; skipping boot/vendor_boot/dtbo repack."
+            exit 0
           fi
 
           BOOT_DIR="$GITHUB_WORKSPACE/kernel/out_hyperos/arch/arm64/boot"
