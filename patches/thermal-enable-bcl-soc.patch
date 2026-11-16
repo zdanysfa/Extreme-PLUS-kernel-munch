@@ -1,0 +1,18 @@
+diff --git a/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi b/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
+index a16f34c..547643e 100644
+--- a/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
++++ b/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
+@@ -277,10 +277,12 @@
+ 			#thermal-sensor-cells = <1>;
+ 		};
+ 
++		/* munch: thermal zone "soc" memakai sensor ini; kalau disabled, thermal HAL
++		 * QTI gagal baca "soc" dan ThermalManagerService memutus HAL. */
+ 		bcl_soc:bcl-soc {
+ 			compatible = "qcom,msm-bcl-soc";
+ 			#thermal-sensor-cells = <0>;
+-			status = "disabled";
++			status = "okay";
+ 		};
+ 
+ 		pm8150b_fg: qpnp,fg {

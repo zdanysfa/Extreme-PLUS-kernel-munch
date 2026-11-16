@@ -90,6 +90,8 @@ jobs:
           git apply ../patches/cip136-and-security-fixes.patch
           # FT3658U: ignore the wake-time power status 0 from HyperOS 4 (fingerprint wake touch freeze).
           git apply ../patches/touch-ignore-wake-suspend.patch
+          # pm8150b bcl-soc: thermal zone "soc" needs its sensor, else the QTI thermal HAL read fails.
+          git apply ../patches/thermal-enable-bcl-soc.patch
           cd ..
 
       - name: "⚙️ Inject PandeyJI Custom Build Script"
