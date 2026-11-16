@@ -1,0 +1,60 @@
+diff --git a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
+index ada7b96..648a2f7 100755
+--- a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
++++ b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
+@@ -69,6 +69,9 @@ struct fts_ts_data *fts_data;
+ /*****************************************************************************
+ * Static function prototypes
+ *****************************************************************************/
++/* sleep -> reset gap that is known to recover the FT3658U */
++#define FTS_SLEEP_SETTLE_MS	200
++
+ static int fts_ts_suspend(struct device *dev);
+ static int fts_ts_resume(struct device *dev);
+ 
+@@ -1851,6 +1854,7 @@ static int fts_ts_suspend(struct device *dev)
+ 		ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
+ 		if (ret < 0)
+ 			FTS_ERROR("set TP to sleep mode fail, ret=%d", ret);
++		ts_data->sleep_jiffies = jiffies;
+ 
+ 		if (!ts_data->ic_info.is_incell && ts_data->poweroff_on_sleep) {
+ #if FTS_POWER_SOURCE_CUST_EN
+@@ -1880,6 +1884,25 @@ static int fts_ts_resume(struct device *dev)
+ 
+ 	fts_release_all_finger();
+ 
++	/*
++	 * HyperOS 4 sends Touch_Power_Status 0 then 1 within ~20 ms while the
++	 * panel wakes from a side fingerprint unlock. Resetting the FT3658U
++	 * that soon after the sleep command leaves it answering the chip id
++	 * but raising no more touch interrupts until the next screen off.
++	 * A manual power off/on (200 ms gap) always recovers, so keep at
++	 * least FTS_SLEEP_SETTLE_MS between sleep and reset.
++	 */
++	if (ts_data->sleep_jiffies) {
++		unsigned long settle = ts_data->sleep_jiffies +
++				msecs_to_jiffies(FTS_SLEEP_SETTLE_MS);
++
++		if (time_before(jiffies, settle)) {
++			FTS_INFO("TP still entering sleep, wait %u ms",
++				 jiffies_to_msecs(settle - jiffies));
++			msleep(jiffies_to_msecs(settle - jiffies));
++		}
++	}
++
+ 	if (!ts_data->ic_info.is_incell) {
+ #if FTS_POWER_SOURCE_CUST_EN
+ 		fts_power_source_resume(ts_data);
+diff --git a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
+index ec081f7..e8087b5 100755
+--- a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
++++ b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
+@@ -197,6 +197,7 @@ struct fts_ts_data {
+ 	bool pm_suspend;
+ #endif
+ 	bool suspended;
++	unsigned long sleep_jiffies;	/* when the sleep command was sent */
+ 	bool fw_loading;
+ 	bool irq_disabled;
+ 	bool power_disabled;
