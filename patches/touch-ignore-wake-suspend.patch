@@ -1,0 +1,54 @@
+diff --git a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
+index ada7b96..c443278 100755
+--- a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
++++ b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.c
+@@ -69,6 +69,9 @@ struct fts_ts_data *fts_data;
+ /*****************************************************************************
+ * Static function prototypes
+ *****************************************************************************/
++/* window after a DRM unblank in which power status 0 is ignored */
++#define FTS_UNBLANK_GUARD_MS	1000
++
+ static int fts_ts_suspend(struct device *dev);
+ static int fts_ts_resume(struct device *dev);
+ 
+@@ -1370,6 +1373,7 @@ static int drm_notifier_callback(struct notifier_block *self,
+ 	FTS_INFO("DRM event:%lu, blank:%d", event, blank);
+ 
+ 	if (blank == MI_DRM_BLANK_UNBLANK) {
++		ts_data->unblank_jiffies = jiffies;
+ 		queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
+ 
+ 	} else if (blank == MI_DRM_BLANK_POWERDOWN ||
+@@ -2234,6 +2238,19 @@ static void fts_power_status_handle(struct fts_ts_data *fts_data)
+ 		FTS_INFO("SuperWallpaper out");
+ 		queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
+ 	} else if (!fts_data->power_status) {
++		/*
++		 * A side fingerprint unlock wakes the panel and HyperOS 4 then
++		 * sends power status 0/1 within ~100 ms. Suspending the FT3658U
++		 * right after the unblank resume leaves it raising no touch
++		 * interrupts until the next screen off, even with a 200 ms gap
++		 * before the second reset. Skip that wake-time suspend; later
++		 * ones (Super Wallpaper on a lit screen) still suspend.
++		 */
++		if (time_before(jiffies, fts_data->unblank_jiffies +
++				msecs_to_jiffies(FTS_UNBLANK_GUARD_MS))) {
++			FTS_INFO("SuperWallpaper in during wake, ignored");
++			return;
++		}
+ 		FTS_INFO("SuperWallpaper in");
+ 		cancel_work_sync(&fts_data->resume_work);
+ 		fts_ts_suspend(fts_data->dev);
+diff --git a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
+index ec081f7..061a724 100755
+--- a/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
++++ b/drivers/input/touchscreen/focaltech_3658u/focaltech_core.h
+@@ -197,6 +197,7 @@ struct fts_ts_data {
+ 	bool pm_suspend;
+ #endif
+ 	bool suspended;
++	unsigned long unblank_jiffies;	/* last DRM unblank */
+ 	bool fw_loading;
+ 	bool irq_disabled;
+ 	bool power_disabled;
