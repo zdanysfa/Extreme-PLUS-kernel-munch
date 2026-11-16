@@ -1,0 +1,51 @@
+--- a/drivers/power/supply/qcom/bq27z561_fg_munch.c
++++ b/drivers/power/supply/qcom/bq27z561_fg_munch.c
+@@ -29,6 +29,7 @@
+ #include <linux/regmap.h>
+ #include <linux/random.h>
+ #include <linux/ktime.h>
++#include <linux/sched.h>
+ #include <linux/pmic-voter.h>
+ #include "step-chg-jeita.h"
+ 
+@@ -77,6 +78,8 @@
+ #define BQ_I2C_FAILED_SOC	15
+ #define BQ_I2C_FAILED_TEMP	250
+ #define BQ_I2C_FAILED_TEMP_HIGH	500
++#define BQ_FAKE_TEMP_MIN	(-400)
++#define BQ_FAKE_TEMP_MAX	1000
+ #define BMS_FG_VERIFY		"BMS_FG_VERIFY"
+ #define BMS_VERIFY_VOTER	"BATT_VERIFY_VOTER"
+ 
+@@ -1120,6 +1123,11 @@
+ 		return BQ_I2C_FAILED_TEMP;
+ 	}
+ 	i2c_error_cnt[bq->fg_index] = 0;
++	/* A corrupted word (e.g. 0x9600 -> 3567 degC) must not reach BatteryService. */
++	if ((int)temp - 2730 < BQ_FAKE_TEMP_MIN || (int)temp - 2730 > BQ_FAKE_TEMP_MAX) {
++		pr_warn_ratelimited("bq_fg: drop bogus temp raw 0x%04x\n", temp);
++		return last_temp[bq->fg_index];
++	}
+ 	last_temp[bq->fg_index] = temp - 2730;
+ 
+ 	return temp - 2730;
+@@ -1865,6 +1873,19 @@
+ 
+ 	switch (prop) {
+ 	case POWER_SUPPLY_PROP_TEMP:
++		/*
++		 * Battery temp is in 0.1 degC. A port userspace wrote 35670
++		 * (milli-degC, 35.67 degC) here, which reads as 3567 degC and makes
++		 * BatteryService power the phone off with "thermal,battery".
++		 * -EINVAL clears the override; anything outside -40..100 degC is
++		 * rejected so a unit mix-up can never shut the device down.
++		 */
++		if (val->intval != -EINVAL &&
++		    (val->intval < BQ_FAKE_TEMP_MIN || val->intval > BQ_FAKE_TEMP_MAX)) {
++			pr_warn_ratelimited("bq_fg: reject fake temp %d from %s[%d]\n",
++					    val->intval, current->comm, current->pid);
++			return -EINVAL;
++		}
+ 		bq->fake_temp = val->intval;
+ 		break;
+ 	case POWER_SUPPLY_PROP_CAPACITY:

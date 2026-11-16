@@ -92,6 +92,8 @@ jobs:
           git apply ../patches/touch-ignore-wake-suspend.patch
           # camera-xiaomi: cip136 closed the CCI subdev ioctl; route in-kernel sensor I/O to the CCI core.
           git apply ../patches/camera-xiaomi-cci-direct.patch
+          # bq27z561 (munch): reject out-of-range fake temp writes and bogus I2C reads (shutdown,thermal,battery at 33 degC).
+          git apply ../patches/fg-reject-bogus-fake-temp.patch
           cd ..
 
       - name: "⚙️ Inject PandeyJI Custom Build Script"
