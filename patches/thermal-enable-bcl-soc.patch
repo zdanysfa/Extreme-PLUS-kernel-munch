@@ -1,13 +1,49 @@
+diff --git a/arch/arm64/boot/dts/vendor/qcom/kona-thermal-overlay.dtsi b/arch/arm64/boot/dts/vendor/qcom/kona-thermal-overlay.dtsi
+index 4d8cb9a..7928b7c 100644
+--- a/arch/arm64/boot/dts/vendor/qcom/kona-thermal-overlay.dtsi
++++ b/arch/arm64/boot/dts/vendor/qcom/kona-thermal-overlay.dtsi
+@@ -5,30 +5,6 @@
+ };
+ 
+ &thermal_zones {
+-	soc {
+-		cooling-maps {
+-			soc_cpu4 {
+-				trip = <&soc_trip>;
+-				cooling-device = <&cpu4_isolate 1 1>;
+-			};
+-
+-			soc_cpu5 {
+-				trip = <&soc_trip>;
+-				cooling-device = <&cpu5_isolate 1 1>;
+-			};
+-
+-			soc_cpu6 {
+-				trip = <&soc_trip>;
+-				cooling-device = <&cpu6_isolate 1 1>;
+-			};
+-
+-			soc_cpu7 {
+-				trip = <&soc_trip>;
+-				cooling-device = <&cpu7_isolate 1 1>;
+-			};
+-		};
+-	};
+-
+ 	pm8150b-bcl-lvl0 {
+ 		cooling-maps {
+ 			vbat_cpu4 {
 diff --git a/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi b/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
-index a16f34c..547643e 100644
+index a16f34c..aa14c16 100644
 --- a/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
 +++ b/arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi
-@@ -277,10 +277,12 @@
+@@ -277,10 +277,13 @@
  			#thermal-sensor-cells = <1>;
  		};
  
-+		/* munch: thermal zone "soc" memakai sensor ini; kalau disabled, thermal HAL
-+		 * QTI gagal baca "soc" dan ThermalManagerService memutus HAL. */
++		/* munch: the QTI thermal HAL reads zone "soc"; with this sensor disabled the
++		 * read fails and ThermalManagerService drops the HAL. Its CPU isolation
++		 * cooling maps are removed in kona-thermal-overlay.dtsi (no perf change). */
  		bcl_soc:bcl-soc {
  			compatible = "qcom,msm-bcl-soc";
  			#thermal-sensor-cells = <0>;
