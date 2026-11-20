@@ -412,10 +412,11 @@ build_target_os() {
         -e ZSTD_COMMON \
         -e ZSTD_COMPRESS \
         -e ZSTD_DECOMPRESS \
-        -e ZRAM_DEF_COMP_ZSTD \
+        -e CRYPTO_LZ4 \
+        -e ZRAM_DEF_COMP_LZ4 \
+        -d ZRAM_DEF_COMP_ZSTD \
         -d ZRAM_DEF_COMP_LZO \
         -d ZRAM_DEF_COMP_LZORLE \
-        -d ZRAM_DEF_COMP_LZ4 \
         -d ZRAM_DEF_COMP_LZ4HC \
         -d ZRAM_DEF_COMP_842
 
@@ -601,20 +602,14 @@ build_target_os() {
         echo "❌ CONFIG_BBG=y but baseband_guard is missing from CONFIG_LSM"; exit 1
     fi
 
-    # ZRAM must use ZSTD, not the legacy LZO/LZO-RLE default. LZO symbols
-    # remain available only for stock vendor-module ABI compatibility.
+    # ZRAM default is LZ4: swap-heavy gaming on 8 GB needs fast (de)compression more than the
+    # extra ~25% ratio of ZSTD. ZSTD stays built in (selectable via comp_algorithm).
     if ! grep -q '^CONFIG_ZRAM=y' "${OUT_DIR}/.config" ||
+       ! grep -q '^CONFIG_CRYPTO_LZ4=y' "${OUT_DIR}/.config" ||
        ! grep -q '^CONFIG_CRYPTO_ZSTD=y' "${OUT_DIR}/.config" ||
-       ! grep -q '^CONFIG_ZSTD_COMPRESS=y' "${OUT_DIR}/.config" ||
-       ! grep -q '^CONFIG_ZSTD_DECOMPRESS=y' "${OUT_DIR}/.config" ||
-       ! grep -q '^CONFIG_ZRAM_DEF_COMP_ZSTD=y' "${OUT_DIR}/.config"; then
-        echo "❌ [ERROR] ZSTD ZRAM support was not enabled."
-        grep '^CONFIG_\(CRYPTO_ZSTD\|ZSTD_\|ZRAM_DEF_COMP\)' "${OUT_DIR}/.config" || true
-        exit 1
-    fi
-    if grep -q '^CONFIG_ZRAM_DEF_COMP_\(LZO\|LZORLE\|LZ4\|LZ4HC\|842\)=y' "${OUT_DIR}/.config"; then
-        echo "❌ [ERROR] A legacy ZRAM compressor is still selected as default."
-        grep '^CONFIG_ZRAM_DEF_COMP' "${OUT_DIR}/.config" || true
+       ! grep -q '^CONFIG_ZRAM_DEF_COMP_LZ4=y' "${OUT_DIR}/.config"; then
+        echo "❌ [ERROR] LZ4 ZRAM default was not enabled."
+        grep '^CONFIG_\(CRYPTO_LZ4\|CRYPTO_ZSTD\|ZSTD_\|ZRAM_DEF_COMP\)' "${OUT_DIR}/.config" || true
         exit 1
     fi
     if ! grep -q 'compression_level' crypto/zstd.c ||
