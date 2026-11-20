@@ -94,6 +94,8 @@ jobs:
           git apply ../patches/cip136-and-security-fixes.patch
           # FT3658U: ignore the wake-time power status 0 from HyperOS 4 (fingerprint wake touch freeze).
           git apply ../patches/touch-ignore-wake-suspend.patch
+          # FT3658U clones on aftermarket LCDs have no firmware gestures: software double tap to wake.
+          git apply ../patches/touch-sw-dt2w.patch
           # camera-xiaomi: cip136 closed the CCI subdev ioctl; route in-kernel sensor I/O to the CCI core.
           git apply ../patches/camera-xiaomi-cci-direct.patch
           # bq27z561 (munch): reject out-of-range fake temp writes and bogus I2C reads (shutdown,thermal,battery at 33 degC).

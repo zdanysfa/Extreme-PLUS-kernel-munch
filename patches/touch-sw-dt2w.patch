@@ -1,0 +1,120 @@
+--- a/drivers/input/touchscreen/focaltech_3658u/focaltech_gesture.c
++++ b/drivers/input/touchscreen/focaltech_3658u/focaltech_gesture.c
+@@ -287,6 +287,93 @@
+ *         1 - tp not in suspend/gesture not enable in TP FW
+ *         -Exx - error
+ *****************************************************************************/
++/*
++ * Software double tap. Aftermarket LCDs for munch carry an FT3658U clone that
++ * answers the chip-ID registers but has no firmware gestures: the 0xD0 gesture
++ * enable never reads back and the gesture block of every report is junk. The
++ * clone still scans and raises touch interrupts after fts_gesture_suspend(),
++ * so detect the double tap from those raw reports instead.
++ */
++#define FTS_SW_DT2W_TAP_MAX_MS		250	/* finger down to up */
++#define FTS_SW_DT2W_GAP_MAX_MS		400	/* first up to second down */
++#define FTS_SW_DT2W_SLOP		1500	/* report units (x10 px), ~150 px */
++
++static struct {
++	bool down;
++	bool first_tap;
++	unsigned long down_jiffies;
++	unsigned long up_jiffies;
++	int down_x;
++	int down_y;
++	int first_x;
++	int first_y;
++} sw_dt2w;
++
++static void fts_sw_dt2w_reset(void)
++{
++	memset(&sw_dt2w, 0, sizeof(sw_dt2w));
++}
++
++/* Feed one touch report; true when it completes a double tap. */
++static bool fts_sw_dt2w_feed(const u8 *buf)
++{
++	u8 points = buf[FTS_TOUCH_POINT_NUM] & 0x0F;
++	unsigned long now = jiffies;
++	int x, y;
++
++	if (points == 0x0F)	/* 0xFF filled: no data */
++		return false;
++
++	if (points > 1) {	/* palm or two fingers: not a tap */
++		fts_sw_dt2w_reset();
++		return false;
++	}
++
++	if (points == 1) {
++		if (sw_dt2w.down)
++			return false;
++		/* same decoding as fts_read_parse_touchdata(), first point */
++		x = ((buf[FTS_TOUCH_PRE_POS] & 0xF0) >> 4) +
++		    (buf[FTS_TOUCH_X_L_POS] << 4) +
++		    ((buf[FTS_TOUCH_X_H_POS] & 0x0F) << 12);
++		y = (buf[FTS_TOUCH_PRE_POS] & 0x0F) +
++		    (buf[FTS_TOUCH_Y_L_POS] << 4) +
++		    ((buf[FTS_TOUCH_Y_H_POS] & 0x0F) << 12);
++		x = x * 10 / 16;
++		y = y * 10 / 16;
++		if (sw_dt2w.first_tap &&
++		    (time_after(now, sw_dt2w.up_jiffies +
++				msecs_to_jiffies(FTS_SW_DT2W_GAP_MAX_MS)) ||
++		     abs(x - sw_dt2w.first_x) > FTS_SW_DT2W_SLOP ||
++		     abs(y - sw_dt2w.first_y) > FTS_SW_DT2W_SLOP))
++			sw_dt2w.first_tap = false;
++		sw_dt2w.down = true;
++		sw_dt2w.down_jiffies = now;
++		sw_dt2w.down_x = x;
++		sw_dt2w.down_y = y;
++		return false;
++	}
++
++	/* points == 0: finger lifted */
++	if (!sw_dt2w.down)
++		return false;
++	sw_dt2w.down = false;
++	if (time_after(now, sw_dt2w.down_jiffies +
++		       msecs_to_jiffies(FTS_SW_DT2W_TAP_MAX_MS))) {
++		sw_dt2w.first_tap = false;	/* long press */
++		return false;
++	}
++	if (sw_dt2w.first_tap) {
++		fts_sw_dt2w_reset();
++		return true;
++	}
++	sw_dt2w.first_tap = true;
++	sw_dt2w.up_jiffies = now;
++	sw_dt2w.first_x = sw_dt2w.down_x;
++	sw_dt2w.first_y = sw_dt2w.down_y;
++	return false;
++}
++
+ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
+ {
+ 	int ret = 0;
+@@ -308,8 +395,13 @@
+ 
+ 	memcpy(buf, data, FTS_GESTURE_DATA_LEN);
+ 	if (buf[0] != ENABLE) {
+-		FTS_DEBUG("gesture not enable in fw, don't process gesture");
+-		return 1;
++		/* no firmware gesture: software double tap, touches are not reported */
++		if ((ts_data->gesture_status & 0x01) &&
++		    fts_sw_dt2w_feed(ts_data->point_buf)) {
++			FTS_INFO("software double tap");
++			fts_gesture_report(input_dev, GESTURE_DOUBLECLICK);
++		}
++		return 0;
+ 	}
+ 
+ 
+@@ -366,6 +458,7 @@
+ 	if (enable_irq_wake(ts_data->irq)) {
+ 		FTS_DEBUG("enable_irq_wake(irq:%d) fail", ts_data->irq);
+ 	}
++	fts_sw_dt2w_reset();
+ 
+ 	for (i = 0; i < 5; i++) {
+ 		fts_write_reg(0xD1, 0xFF);
