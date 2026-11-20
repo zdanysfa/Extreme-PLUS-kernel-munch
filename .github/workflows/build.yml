@@ -1,4 +1,4 @@
-name: "🚀 Build EXTREME++ Kernel (BMW Edition - Dynamic Profiles)"
+name: "🚀 Build HyperStock Kernel (munch)"
 
 on:
   workflow_dispatch:
@@ -60,7 +60,7 @@ jobs:
           for chat in "${TARGETS[@]}"; do
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
               -d chat_id="$chat" \
-              -d text="🚀 <b>EXTREME++ Build Started!</b>%0A📱 Device: POCO F4 (munch)%0A🏎️ Edition: EXTREME++ Gaming (BMW Edition)%0A🎯 Target: ${TARGET_LABEL}%0A${ROOT_LABEL}%0A⚡ Default Clock: 3.19 GHz Unlocked Peak (Dynamic Profiles)" -d parse_mode="HTML" || true
+              -d text="🚀 <b>HyperStock Kernel Build Started!</b>%0A📱 Device: POCO F4 (munch)%0A🏎️ Edition: HyperStock%0A🎯 Target: ${TARGET_LABEL}%0A${ROOT_LABEL}%0A⚡ Default Clock: 3.19 GHz Unlocked Peak (Dynamic Profiles)" -d parse_mode="HTML" || true
           done
 
       - name: "📦 Checkout config repo"
@@ -69,14 +69,18 @@ jobs:
       - name: "🛠️ Install build dependencies"
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libncurses5 libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python3-pip
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libncurses5 libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python3-pip binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi zstd
 
-      - name: "⚡ Setup ZyC-Clang 16"
+      - name: "⚡ Setup Neutron Clang (latest)"
         run: |
-          mkdir -p $HOME/zyc-clang
-          curl -L "https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260807-release/Clang-16.0.6-20260807.tar.gz" -o clang.tar.gz
-          tar -xzf clang.tar.gz -C $HOME/zyc-clang
-          rm clang.tar.gz
+          # Always the newest Neutron release (LLVM main snapshot).
+          URL=$(curl -fsSL https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest \
+            | grep -o '"browser_download_url": *"[^"]*\.tar\.zst"' | head -1 | cut -d'"' -f4)
+          [ -n "$URL" ] || { echo "❌ No Neutron Clang release asset found"; exit 1; }
+          echo "Neutron Clang: $URL"
+          mkdir -p $HOME/clang
+          curl -fL "$URL" | tar --zstd -x -C $HOME/clang
+          $HOME/clang/bin/clang --version | head -1
 
       - name: "🌐 Clone kernel source (Build #125 pinned base)"
         run: |
@@ -114,13 +118,13 @@ jobs:
           echo "[*] New RAM Capacity:"
           free -h
 
-      - name: "🔨 Compile EXTREME++ Kernel"
+      - name: "🔨 Compile HyperStock Kernel"
         run: |
           cd kernel
           ./build_kernel.sh munch "${{ inputs.root_mode }}" "${{ inputs.target_os }}"
           
           echo "✅ Built ZIP files:"
-          ls -lh EXTREME++*.zip
+          find . -maxdepth 1 \( -name "EXTREME++*.zip" -o -name "HyperStock*.zip" \) -exec ls -lh {} +
 
       - name: "📦 Package Raw Kernel Images for HyperOS 4 (.img / dtb)"
         if: success()
@@ -159,7 +163,7 @@ jobs:
             find "$HYPEROS_BOOT" -maxdepth 1 -name "*.img" -exec cp -f {} "$IMG_DIR/" \; 2>/dev/null || true
 
             # 5. Compress into a clean, lossless ZIP package
-            RAW_ZIP_NAME="EXTREME++_HyperOS4_Raw_Images_Build_${{ github.run_number }}.zip"
+            RAW_ZIP_NAME="HyperStock_HyperOS4_Raw_Images_Build_${{ github.run_number }}.zip"
             (
               cd "$IMG_DIR"
               zip -9 -r "$OUT_ZIP_DIR/$RAW_ZIP_NAME" ./*
@@ -322,9 +326,10 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: EXTREME++_BMW_Edition_BETA_${{ github.run_number }}
+          name: HyperStock_Kernel_${{ github.run_number }}
           path: |
             kernel/EXTREME++*.zip
+            kernel/HyperStock*.zip
             raw_images/*.zip
             hyperos4_images/boot.img
             hyperos4_images/vendor_boot.img
@@ -349,7 +354,7 @@ jobs:
             exit 1
           fi
           ARTIFACT_URL="${ARTIFACT_URL:-https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}}"
-          MSG=$(printf '🚀 <b>EXTREME++ HyperOS 4 Flashable Images</b> [Build #%s]\n\n📱 <b>Device:</b> POCO F4 (munch)\n🏎️ <b>Edition:</b> BMW Edition [BETA]\n\n📦 Download partitioned flashable images (<b>boot.img</b>, <b>vendor_boot.img</b>, <b>dtbo.img</b>, <b>SHA256SUMS.txt</b>) from the workflow artifact:\n👉 %s\n\n📁 <b>Artifact Name:</b> EXTREME++_BMW_Edition_BETA_%s' \
+          MSG=$(printf '🚀 <b>HyperStock HyperOS 4 Flashable Images</b> [Build #%s]\n\n📱 <b>Device:</b> POCO F4 (munch)\n🏎️ <b>Edition:</b> HyperStock\n\n📦 Download partitioned flashable images (<b>boot.img</b>, <b>vendor_boot.img</b>, <b>dtbo.img</b>, <b>SHA256SUMS.txt</b>) from the workflow artifact:\n👉 %s\n\n📁 <b>Artifact Name:</b> HyperStock_Kernel_%s' \
             "${GITHUB_RUN_NUMBER}" "${ARTIFACT_URL}" "${GITHUB_RUN_NUMBER}")
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_DM_ID}" \
@@ -370,11 +375,11 @@ jobs:
             ROOT_DESC="🚀 <b>Root Variants:</b> All 3 (KowSU + SuSFS v2.4.0, KowSU Standard KSU, Pure Clean)"
           fi
 
-          MSG="🔥 <b>EXTREME++ BMW Edition [BETA] Release #${{ github.run_number }}</b>%0A%0A"
+          MSG="🔥 <b>HyperStock Kernel Release #${{ github.run_number }}</b>%0A%0A"
           MSG="${MSG}📱 <b>Device:</b> POCO F4 (munch)%0A"
-          MSG="${MSG}🏎️ <b>Edition:</b> EXTREME++ Gaming (BMW Edition [BETA])%0A"
-          MSG="${MSG}🛠️ <b>Toolchain:</b> ZyC-Clang 16.0.6 + LLD%0A"
-          MSG="${MSG}👑 <b>Author:</b> Extreme++ by @pandey_ji_8%0A"
+          MSG="${MSG}🏎️ <b>Edition:</b> HyperStock%0A"
+          MSG="${MSG}🛠️ <b>Toolchain:</b> $($HOME/clang/bin/clang --version | head -1 | sed 's/ (http[^)]*)//; s/ ([^)]*)$//') + LLD%0A"
+          MSG="${MSG}👑 <b>Base:</b> Extreme++ by @pandey_ji_8%0A"
           MSG="${MSG}${ROOT_DESC}%0A%0A"
           MSG="${MSG}✨ <b>Dynamic In-Kernel Profiles (/sys/kernel/extreme_profile):</b>%0A"
           MSG="${MSG}• 🚀 <b>Gaming [0]:</b> 3.19GHz Prime Monster + 2.42GHz Gold (Peak 120 FPS)%0A"
@@ -393,7 +398,7 @@ jobs:
               -d parse_mode="HTML" || true
           done
 
-          for z in $(find "$GITHUB_WORKSPACE/kernel" -maxdepth 1 -name "EXTREME++*.zip" | sort); do
+          for z in $(find "$GITHUB_WORKSPACE/kernel" -maxdepth 1 \( -name "EXTREME++*.zip" -o -name "HyperStock*.zip" \) | sort); do
             echo "Uploading $z to Telegram..."
             BNAME=$(basename "$z")
             if [[ "$BNAME" == *"HyperOS"* ]]; then
@@ -416,7 +421,7 @@ jobs:
               VARIANT_TAG=""
             fi
 
-            ZIP_CAPTION="📦 <b>${BNAME}</b>%0A${TARGET_TAG}%0A${VARIANT_TAG}%0A👑 Extreme++ BMW Edition by @pandey_ji_8"
+            ZIP_CAPTION="📦 <b>${BNAME}</b>%0A${TARGET_TAG}%0A${VARIANT_TAG}%0A👑 HyperStock, based on Extreme++ by @pandey_ji_8"
             for chat in "${TARGETS[@]}"; do
               curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument" \
                 -F chat_id="$chat" \
@@ -436,6 +441,6 @@ jobs:
           for chat in "${TARGETS[@]}"; do
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
               -d chat_id="$chat" \
-              -d text="❌ <b>EXTREME++ Build #${{ github.run_number }} FAILED!</b>%0APlease check GitHub Actions workflow logs." \
+              -d text="❌ <b>HyperStock Build #${{ github.run_number }} FAILED!</b>%0APlease check GitHub Actions workflow logs." \
               -d parse_mode="HTML" || true
           done

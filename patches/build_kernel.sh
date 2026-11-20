@@ -49,7 +49,7 @@ case "$TARGET_OS" in
 esac
 
 KERNEL_DIR="$(pwd)"
-TOOLCHAIN_BIN="$HOME/zyc-clang/bin"
+TOOLCHAIN_BIN="$HOME/clang/bin"
 
 export PATH="${TOOLCHAIN_BIN}:${PATH}"
 export ARCH="arm64"
@@ -180,6 +180,13 @@ if apk_sign_path:
     curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh" | bash -s
     echo "CONFIG_NOMOUNT=y" >> "arch/arm64/configs/${DEFCONFIG}"
     echo "[+] NoMount built-in setup finished."
+
+    # Baseband-guard LSM (latest main): blocks root (su/ksu/magisk domains) from writing modem/EFS/
+    # bootloader block devices; boot, dtbo, vbmeta, recovery and userdata stay writable.
+    # 4.19 has no CONFIG_LSM ordering, so BBG registers through security_initcall.
+    curl -LSs "https://raw.githubusercontent.com/vc-teahouse/Baseband-guard/main/setup.sh" | bash
+    echo "CONFIG_BBG=y" >> "arch/arm64/configs/${DEFCONFIG}"
+    echo "[+] Baseband-guard setup finished."
 }
 
 # ------------------------------------------
@@ -283,6 +290,15 @@ if [ -f "apply-eas-tuning.py" ]; then
     echo "[*] Applying EAS Energy Model & Capacity Margin Tuning..."
     python3 apply-eas-tuning.py arch/arm64/boot/dts/vendor/qcom/kona.dtsi || echo "⚠️ EAS tuning failed, continuing..."
 fi
+
+# Gold-core passive trips (cpufreq-10..17-config) start throttling at 75 C die temperature, the
+# main remaining cap under sustained load. Move them to 95 C; the 110 C trips, LMh hardware limits
+# and the silver-core trips stay stock.
+THERMAL_DTSI="arch/arm64/boot/dts/vendor/qcom/kona-thermal.dtsi"
+sed -i '/cpufreq-1[0-7]-config {/,/};/ s/temperature = <75000>;/temperature = <95000>;/' "$THERMAL_DTSI"
+GOLD_TRIPS=$(grep -A1 'cpufreq-1[0-7]-config {' "$THERMAL_DTSI" | grep -c 'temperature = <95000>;')
+[ "$GOLD_TRIPS" -eq 8 ] || { echo "❌ Gold-core thermal trips: expected 8 at 95 C, got $GOLD_TRIPS"; exit 1; }
+echo "[+] Gold-core passive thermal trips moved from 75 C to 95 C"
 
 if [ -f "apply-vmscan-critical.py" ]; then
     echo "[*] Applying Critical Task Direct Reclaim Anti-Stutter Patch (Google ACK fix)..."
