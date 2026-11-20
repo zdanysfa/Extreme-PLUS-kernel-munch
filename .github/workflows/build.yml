@@ -26,7 +26,7 @@ on:
 jobs:
   build:
     name: "Compile → Release"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     timeout-minutes: 180 
@@ -69,7 +69,7 @@ jobs:
       - name: "🛠️ Install build dependencies"
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libncurses5 libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python3-pip binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi zstd
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev lz4 libncurses-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python3-pip binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi zstd
 
       - name: "⚡ Setup Neutron Clang (latest)"
         run: |
