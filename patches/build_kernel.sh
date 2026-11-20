@@ -59,6 +59,11 @@ export CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
 export CCACHE_DIR="$HOME/.cache/ccache_mikernel"
 export CCACHE_EXEC=$(command -v ccache)
 export USE_CCACHE=1
+# Kernel identity shown in Settings > About (uname -r and /proc/version).
+export KBUILD_BUILD_USER="HyperStock"
+export KBUILD_BUILD_HOST="munch"
+# Empty (but set) LOCALVERSION stops scripts/setlocalversion from appending "+" to the release.
+export LOCALVERSION=""
 
 TOTAL_CORES=$(nproc --all)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -106,8 +111,8 @@ inject_ksu_susfs() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "⚡ Injecting ReSukiSU / KowSU Multi-Manager & SuSFS v2.4.0 Source..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    # BakaSU (ReSukiSU's new name) main @ 2026-11-10: 88 commits past v4.2.0-rc3, incl. SuSFS backport fixes.
-    curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/548d1dda060ca198823d8808804d01f5209ef4a9/kernel/setup.sh" | bash -s -- 548d1dda060ca198823d8808804d01f5209ef4a9
+    # BakaSU (ReSukiSU's new name): always latest main. The local patches below fail the build loudly if upstream drifts.
+    curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s -- main
 
     # Base tree ships SuSFS v2.4.0 (== JackA1ltman 183beb3); delta = interdiff to JackA1ltman 37b8051 (v2.4.0).
     if ! grep -q '"v2.4.0"' include/linux/susfs.h; then
@@ -171,7 +176,8 @@ if apk_sign_path:
 
     # NoMount: built-in VFS path redirection (mountless modules); 4.19 can't load the upstream GKI LKM.
     # Root builds only: noroot variants compile before this runs, so fs/nomount isn't in their tree.
-    curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/dev/kernel/setup.sh" | bash -s -- v2.3.0-720
+    # No argument = newest v* release tag.
+    curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/master/kernel/setup.sh" | bash -s
     echo "CONFIG_NOMOUNT=y" >> "arch/arm64/configs/${DEFCONFIG}"
     echo "[+] NoMount built-in setup finished."
 }
@@ -483,9 +489,9 @@ build_target_os() {
 
     if [ "$OS" == "hyperos" ]; then
         echo "[*] Injecting Xiaomi HyperOS / HyperOS 4 Subsystems..."
-        LOCALVER="-Extreme++Gaming-HyperOS-BMW"
-        TITLE="Extreme++Gaming BMW Edition [HyperOS] | POCO F4 (munch)"
-        ZIP_BASE="EXTREME++Gaming_BMW_Edition_HyperOS"
+        LOCALVER="-HyperStock"
+        TITLE="HyperStock Kernel [HyperOS] | POCO F4 (munch)"
+        ZIP_BASE="HyperStock_Kernel_HyperOS"
         OS_BADGE="HyperOS 4 / HyperOS (Android 13–17)"
 
         scripts/config --file "${OUT_DIR}/.config" \
@@ -563,9 +569,12 @@ build_target_os() {
             -d LTO_CLANG_THIN -d CFI_CLANG
     fi
 
-    scripts/config --file "${OUT_DIR}/.config" --set-str LOCALVERSION "${LOCALVER}"
+    scripts/config --file "${OUT_DIR}/.config" --set-str LOCALVERSION "${LOCALVER}" -d LOCALVERSION_AUTO
+    # 1000 Hz tick (1 ms) on request; NO_HZ_IDLE keeps idle tickless.
+    scripts/config --file "${OUT_DIR}/.config" -d HZ_250 -d HZ_300 -e HZ_1000 --set-val HZ 1000
     rm -f "${OUT_DIR}/include/config/kernel.release"
     make -j"${TOTAL_CORES}" "${MAKE_OPTS[@]}" olddefconfig
+    grep -q '^CONFIG_HZ=1000$' "${OUT_DIR}/.config" || { echo "❌ CONFIG_HZ is not 1000 after olddefconfig"; exit 1; }
 
     # ZRAM must use ZSTD, not the legacy LZO/LZO-RLE default. LZO symbols
     # remain available only for stock vendor-module ABI compatibility.
