@@ -591,9 +591,12 @@ build_target_os() {
     scripts/config --file "${OUT_DIR}/.config" --set-str LOCALVERSION "${LOCALVER}" -d LOCALVERSION_AUTO
     # 1000 Hz tick (1 ms) on request; NO_HZ_IDLE keeps idle tickless.
     scripts/config --file "${OUT_DIR}/.config" -d HZ_250 -d HZ_300 -e HZ_1000 --set-val HZ 1000
+    # UFS 3.1: deadline instead of cfq (cfq's idling/fairness adds latency on flash storage).
+    scripts/config --file "${OUT_DIR}/.config" -e IOSCHED_DEADLINE -d DEFAULT_CFQ -e DEFAULT_DEADLINE --set-str DEFAULT_IOSCHED deadline
     rm -f "${OUT_DIR}/include/config/kernel.release"
     make -j"${TOTAL_CORES}" "${MAKE_OPTS[@]}" olddefconfig
     grep -q '^CONFIG_HZ=1000$' "${OUT_DIR}/.config" || { echo "❌ CONFIG_HZ is not 1000 after olddefconfig"; exit 1; }
+    grep -q '^CONFIG_DEFAULT_IOSCHED="deadline"$' "${OUT_DIR}/.config" || { echo "❌ default I/O scheduler is not deadline"; exit 1; }
     if grep -q '^CONFIG_BBG=y$' "${OUT_DIR}/.config" && ! grep -q '^CONFIG_LSM=".*baseband_guard' "${OUT_DIR}/.config"; then
         echo "❌ CONFIG_BBG=y but baseband_guard is missing from CONFIG_LSM"; exit 1
     fi
