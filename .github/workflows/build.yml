@@ -72,14 +72,14 @@ jobs:
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev lz4 libncurses-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python3-pip binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi zstd
 
       - name: "⚡ Setup Neutron Clang (latest)"
+        env:
+          GH_TOKEN: ${{ github.token }}  # unauthenticated API calls hit the shared runner rate limit (403)
         run: |
           # Always the newest Neutron release (LLVM main snapshot).
-          URL=$(curl -fsSL https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest \
-            | grep -o '"browser_download_url": *"[^"]*\.tar\.zst"' | head -1 | cut -d'"' -f4)
-          [ -n "$URL" ] || { echo "❌ No Neutron Clang release asset found"; exit 1; }
-          echo "Neutron Clang: $URL"
+          gh release download --repo Neutron-Toolchains/clang-build-catalogue --pattern '*.tar.zst' --dir "$RUNNER_TEMP" --clobber
           mkdir -p $HOME/clang
-          curl -fL "$URL" | tar --zstd -x -C $HOME/clang
+          tar --zstd -xf "$RUNNER_TEMP"/*.tar.zst -C $HOME/clang
+          rm -f "$RUNNER_TEMP"/*.tar.zst
           $HOME/clang/bin/clang --version | head -1
 
       - name: "🌐 Clone kernel source (Build #125 pinned base)"
