@@ -185,6 +185,9 @@ if apk_sign_path:
     # bootloader block devices; boot, dtbo, vbmeta, recovery and userdata stay writable.
     # 4.19 has no CONFIG_LSM ordering, so BBG registers through security_initcall.
     curl -LSs "https://raw.githubusercontent.com/vc-teahouse/Baseband-guard/main/setup.sh" | bash
+    # This tree backports DEFINE_LSM/CONFIG_LSM ordering, so BBG must be listed in CONFIG_LSM
+    # (munch_defconfig does not set it; the Kconfig defaults apply). Command from BBG's README.
+    sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
     echo "CONFIG_BBG=y" >> "arch/arm64/configs/${DEFCONFIG}"
     echo "[+] Baseband-guard setup finished."
 }
@@ -591,6 +594,9 @@ build_target_os() {
     rm -f "${OUT_DIR}/include/config/kernel.release"
     make -j"${TOTAL_CORES}" "${MAKE_OPTS[@]}" olddefconfig
     grep -q '^CONFIG_HZ=1000$' "${OUT_DIR}/.config" || { echo "❌ CONFIG_HZ is not 1000 after olddefconfig"; exit 1; }
+    if grep -q '^CONFIG_BBG=y$' "${OUT_DIR}/.config" && ! grep -q '^CONFIG_LSM=".*baseband_guard' "${OUT_DIR}/.config"; then
+        echo "❌ CONFIG_BBG=y but baseband_guard is missing from CONFIG_LSM"; exit 1
+    fi
 
     # ZRAM must use ZSTD, not the legacy LZO/LZO-RLE default. LZO symbols
     # remain available only for stock vendor-module ABI compatibility.
